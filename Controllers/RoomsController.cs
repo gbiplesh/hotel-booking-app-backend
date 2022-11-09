@@ -1,9 +1,12 @@
 ﻿using HotelAppAPI.Models;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using System;
 using System.Data;
 using System.Data.SqlClient;
+using System.IO;
 
 namespace HotelAppAPI.Controllers
 {
@@ -12,16 +15,18 @@ namespace HotelAppAPI.Controllers
     public class RoomsController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        public RoomsController(IConfiguration configuration)
+        private readonly IWebHostEnvironment _env; 
+        public RoomsController(IConfiguration configuration, IWebHostEnvironment env)
         {
             _configuration = configuration;
+            _env = env;
         }
 
         [HttpGet]
         public JsonResult Get()
         {
             string query = @"
-                            select Id, RoomType, Price, Beds, Available from
+                            select Id, RoomType, Price, Beds, Available, Image from
                             dbo.Rooms";
             DataTable table = new DataTable();
             string sqlDataSource = _configuration.GetConnectionString("HotelAppConnection");
@@ -46,7 +51,7 @@ namespace HotelAppAPI.Controllers
         {
             string query = @"
                             insert into dbo.Rooms
-                            values (@RoomType, @Price, @Beds, @Available)";
+                            values (@RoomType, @Price, @Beds, @Available, @Image)";
             DataTable table = new DataTable();
             string sqlDataSource = _configuration.GetConnectionString("HotelAppConnection");
             SqlDataReader myReader;
@@ -59,6 +64,7 @@ namespace HotelAppAPI.Controllers
                     myCommand.Parameters.AddWithValue("@Price", room.Price);
                     myCommand.Parameters.AddWithValue("@Beds", room.Beds);
                     myCommand.Parameters.AddWithValue("@Available", room.Available);
+                    myCommand.Parameters.AddWithValue("@Image", room.Image);
                     myReader = myCommand.ExecuteReader();   
                     table.Load(myReader);
                     myReader.Close();
@@ -74,7 +80,7 @@ namespace HotelAppAPI.Controllers
         {
             string query = @"
                             update dbo.Rooms
-                            set RoomType= @RoomType, Price = @Price, Beds = @Beds, Available = @Available
+                            set RoomType= @RoomType, Price = @Price, Beds = @Beds, Available = @Available, Image = @Image
                             where Id=@Id";
             DataTable table = new DataTable();
             string sqlDataSource = _configuration.GetConnectionString("HotelAppConnection");
@@ -89,6 +95,7 @@ namespace HotelAppAPI.Controllers
                     myCommand.Parameters.AddWithValue("@Price", room.Price);
                     myCommand.Parameters.AddWithValue("@Beds", room.Beds);
                     myCommand.Parameters.AddWithValue("@Available", room.Available);
+                    myCommand.Parameters.AddWithValue("@Image", room.Image);
                     myReader = myCommand.ExecuteReader();
                     table.Load(myReader);
                     myReader.Close();
@@ -113,7 +120,6 @@ namespace HotelAppAPI.Controllers
                 myConn.Open();
                 using (SqlCommand myCommand = new SqlCommand(query, myConn))
                 {
-
                     myCommand.Parameters.AddWithValue("@Id", Id);
                     myReader = myCommand.ExecuteReader();
                     table.Load(myReader);
@@ -123,6 +129,31 @@ namespace HotelAppAPI.Controllers
             }
 
             return new JsonResult("Deleted.");
+        }
+
+        [Route("SaveFile")]
+        [HttpPost]
+
+        public JsonResult SaveFile()
+        {
+            try
+            {
+                var httpRequest = Request.Form;
+                var postedFile = httpRequest.Files[0];
+                string filename = postedFile.FileName;
+                var physicalPath = _env.ContentRootPath + "/ImageFiles/" + filename;
+
+                using(var stream = new FileStream(physicalPath, FileMode.Create))
+                {
+                    postedFile.CopyTo(stream);
+                }
+
+                return new JsonResult(filename); 
+            }
+            catch (Exception)
+            {
+                return new JsonResult("random.png");
+            }
         }
     }
 }
